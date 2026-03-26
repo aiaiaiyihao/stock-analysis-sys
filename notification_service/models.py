@@ -15,3 +15,4 @@ class Notification(Base):
     message = Column(Text, nullable=False)
     event_timestamp = Column(String(100), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
