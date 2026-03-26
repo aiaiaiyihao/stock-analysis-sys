@@ -3,6 +3,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 DB_HOST = os.getenv("DB_HOST", "localhost")
+print("DB_HOST =", DB_HOST)
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("DB_NAME", "stockdb")
 DB_USER = os.getenv("DB_USER", "postgres")

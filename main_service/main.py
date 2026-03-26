@@ -19,7 +19,7 @@ def home():
 def get_stock(symbol: str):
     try:
         df = fetch_stock_data(symbol.upper(), period="5d")
-        latest_price = float(df["Close"].dropna().iloc[-1])
+        latest_price = float(df["Close"].dropna().iloc[-1].item())  # ← 加 .item()
 
         alert = check_alert(symbol.upper(), latest_price)
         published = False
@@ -52,10 +52,10 @@ def get_stock_analysis(symbol: str):
 
         return {
             "symbol": symbol.upper(),
-            "latest_close": float(latest_row["Close"]),
-            "sma_5": float(latest_row["SMA_5"]),
-            "sma_20": float(latest_row["SMA_20"]),
-            "daily_return": float(latest_row["Daily_Return"]),
+            "latest_close": float(latest_row["Close"].item()),      # ← 加 .item()
+            "sma_5": float(latest_row["SMA_5"].item()),             # ← 加 .item()
+            "sma_20": float(latest_row["SMA_20"].item()),           # ← 加 .item()
+            "daily_return": float(latest_row["Daily_Return"].item()) # ← 加 .item()
         }
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
