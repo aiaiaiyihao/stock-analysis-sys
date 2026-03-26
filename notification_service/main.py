@@ -3,9 +3,9 @@ import threading
 from fastapi import FastAPI
 from sqlalchemy import select
 
-from app.consumer import consume_alerts
-from app.database import Base, SessionLocal, engine
-from app.models import Notification
+from consumer import consume_alerts
+from database import Base, SessionLocal, engine
+from models import Notification
 
 app = FastAPI(title="Notification Service")
 

@@ -2,10 +2,10 @@ from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException
 
-from app.alert import check_alert
-from app.analysis import add_indicators
-from app.fetch import fetch_stock_data
-from app.kafka_producer import publish_alert_event
+from alert import check_alert
+from analysis import add_indicators
+from fetch import fetch_stock_data
+from kafka_producer import publish_alert_event
 
 app = FastAPI(title="Main Stock Service")
 

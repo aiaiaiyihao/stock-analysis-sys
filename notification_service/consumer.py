@@ -2,8 +2,8 @@ import json
 import os
 from kafka import KafkaConsumer
 
-from app.database import SessionLocal
-from app.models import Notification
+from database import SessionLocal
+from models import Notification
 
 BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:29092")
 ALERT_TOPIC = os.getenv("ALERT_TOPIC", "stock-alerts")
