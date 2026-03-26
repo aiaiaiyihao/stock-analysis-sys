@@ -1,19 +1,21 @@
-from datetime import datetime
+import threading
+
 from fastapi import FastAPI
-from pydantic import BaseModel
+from sqlalchemy import select
+
+from app.consumer import consume_alerts
+from app.database import Base, SessionLocal, engine
+from app.models import Notification
 
 app = FastAPI(title="Notification Service")
 
-notifications = []
+Base.metadata.create_all(bind=engine)
 
 
-class NotificationRequest(BaseModel):
-    symbol: str
-    price: float
-    condition: str
-    threshold: float
-    message: str
-    timestamp: str
+@app.on_event("startup")
+def startup_event():
+    thread = threading.Thread(target=consume_alerts, daemon=True)
+    thread.start()
 
 
 @app.get("/")
@@ -21,32 +23,29 @@ def home():
     return {"message": "Notification service running"}
 
 
-@app.post("/notify")
-def notify(payload: NotificationRequest):
-    record = {
-        "symbol": payload.symbol,
-        "price": payload.price,
-        "condition": payload.condition,
-        "threshold": payload.threshold,
-        "message": payload.message,
-        "timestamp": payload.timestamp,
-        "received_at": datetime.utcnow().isoformat()
-    }
-
-    notifications.append(record)
-
-    print(f"[NOTIFICATION] {record['message']} | current price: {record['price']}")
-
-    return {
-        "status": "received",
-        "delivery": "mock",
-        "notification": record
-    }
-
-
 @app.get("/notifications")
 def get_notifications():
-    return {
-        "count": len(notifications),
-        "items": notifications
-    }
+    db = SessionLocal()
+    try:
+        rows = db.execute(
+            select(Notification).order_by(Notification.id.desc())
+        ).scalars().all()
+
+        return {
+            "count": len(rows),
+            "items": [
+                {
+                    "id": row.id,
+                    "symbol": row.symbol,
+                    "price": row.price,
+                    "condition": row.condition,
+                    "threshold": row.threshold,
+                    "message": row.message,
+                    "event_timestamp": row.event_timestamp,
+                    "created_at": row.created_at.isoformat() if row.created_at else None,
+                }
+                for row in rows
+            ],
+        }
+    finally:
+        db.close()
