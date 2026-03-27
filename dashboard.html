@@ -484,12 +484,123 @@
           padding: 0 16px;
         }
       }
+
+      .chat-card {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        width: 360px;
+        background: var(--surface);
+        border: 1.5px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: 0 8px 32px rgba(26, 23, 20, 0.15);
+        display: flex;
+        flex-direction: column;
+        z-index: 500;
+        overflow: hidden;
+      }
+
+      .chat-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--border);
+        background: var(--text);
+      }
+
+      .chat-title {
+        font-family: "Syne", sans-serif;
+        font-weight: 700;
+        font-size: 0.9rem;
+        color: #fff;
+      }
+
+      .chat-toggle {
+        background: none;
+        border: none;
+        color: #fff;
+        font-size: 1.2rem;
+        cursor: pointer;
+        line-height: 1;
+      }
+
+      .chat-messages {
+        height: 320px;
+        overflow-y: auto;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .msg {
+        max-width: 85%;
+        padding: 10px 14px;
+        border-radius: 12px;
+        font-size: 0.8rem;
+        line-height: 1.6;
+        white-space: pre-wrap;
+      }
+
+      .msg.bot {
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        align-self: flex-start;
+        border-bottom-left-radius: 4px;
+      }
+
+      .msg.user {
+        background: var(--text);
+        color: #fff;
+        align-self: flex-end;
+        border-bottom-right-radius: 4px;
+      }
+
+      .msg.loading {
+        background: var(--surface2);
+        color: var(--text-muted);
+        align-self: flex-start;
+      }
+
+      .chat-input-row {
+        display: flex;
+        gap: 8px;
+        padding: 12px 14px;
+        border-top: 1px solid var(--border);
+      }
+
+      .chat-input-row input {
+        flex: 1;
+        font-family: "DM Mono", monospace;
+        font-size: 0.8rem;
+        padding: 8px 12px;
+        border: 1.5px solid var(--border);
+        border-radius: 8px;
+        outline: none;
+        background: var(--bg);
+      }
+
+      .chat-input-row input:focus {
+        border-color: var(--accent2);
+      }
+
+      .chat-input-row button {
+        font-family: "DM Mono", monospace;
+        font-size: 0.8rem;
+        padding: 8px 14px;
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+      }
     </style>
   </head>
   <body>
     <div class="loading-overlay" id="loadingOverlay">
       <div class="spinner"></div>
-      <div class="loading-text">获取数据中...</div>
+      <div class="loading-text">Data Loading...</div>
     </div>
 
     <div class="toast" id="toast"></div>
@@ -508,11 +619,35 @@
         >
       </div>
     </header>
+    <!-- 聊天机器人 -->
+    <div class="chat-card" id="chatCard">
+      <div class="chat-header">
+        <div class="chat-title">🤖 股票助手</div>
+        <button class="chat-toggle" onclick="toggleChat()">－</button>
+      </div>
+      <div class="chat-messages" id="chatMessages">
+        <div class="msg bot">
+          你好！我是你的股票助手，可以帮你查股价、找涨跌幅最大的股票、查 Alert
+          记录。试试问我：<br /><br />
+          📈 "今天涨幅最大的股票"<br />
+          💰 "AAPL 现在多少钱"<br />
+          🔔 "有哪些 Alert 记录"
+        </div>
+      </div>
+      <div class="chat-input-row">
+        <input
+          id="chatInput"
+          placeholder="输入问题..."
+          onkeydown="if (event.key === 'Enter') sendChat();"
+        />
+        <button onclick="sendChat()">发送</button>
+      </div>
+    </div>
 
     <main>
       <!-- Symbol bar -->
       <div class="symbol-bar">
-        <label>股票代码</label>
+        <label>Stock Symbol</label>
         <button class="symbol-btn active" onclick="selectSymbol('AAPL', this)">
           AAPL
         </button>
@@ -525,20 +660,20 @@
         <input
           class="custom-input"
           id="customSymbol"
-          placeholder="搜索..."
+          placeholder="search..."
           maxlength="5"
           oninput="handleSearchInput(this.value)"
           onkeydown="if (event.key === 'Enter') selectCustom();"
         />
         <button class="refresh-btn" id="refreshBtn" onclick="loadData()">
-          ↻ 刷新
+          ↻ Refresh
         </button>
       </div>
 
       <!-- Stats row -->
       <div class="stats-row" id="statsRow">
         <div class="stat-card">
-          <div class="stat-label">最新价格</div>
+          <div class="stat-label">newest price</div>
           <div
             class="stat-value skeleton"
             id="statPrice"
@@ -549,7 +684,7 @@
           <div class="stat-sub" id="statAlert"></div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">SMA 5日</div>
+          <div class="stat-label">SMA 5 days</div>
           <div
             class="stat-value skeleton"
             id="statSma5"
@@ -560,7 +695,7 @@
           <div class="stat-sub" id="statSma5Sub"></div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">SMA 20日</div>
+          <div class="stat-label">SMA 20 days</div>
           <div
             class="stat-value skeleton"
             id="statSma20"
@@ -571,7 +706,7 @@
           <div class="stat-sub" id="statSma20Sub"></div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">日收益率</div>
+          <div class="stat-label">daily earning</div>
           <div
             class="stat-value skeleton"
             id="statReturn"
@@ -586,15 +721,19 @@
       <!-- Charts -->
       <div class="charts-row">
         <div class="chart-card">
-          <div class="chart-title">价格走势</div>
-          <div class="chart-subtitle" id="priceChartSub">近5日收盘价</div>
+          <div class="chart-title">price trend</div>
+          <div class="chart-subtitle" id="priceChartSub">
+            Closing Prices (Last 5 Days)
+          </div>
           <div class="chart-wrap">
             <canvas id="priceChart"></canvas>
           </div>
         </div>
         <div class="chart-card">
-          <div class="chart-title">均线分析</div>
-          <div class="chart-subtitle">SMA5 vs SMA20 vs 收盘价（近1月）</div>
+          <div class="chart-title">Moving Average Analysis</div>
+          <div class="chart-subtitle">
+            SMA5 vs SMA20 vs Closing Price (Last 1 Month)
+          </div>
           <div class="chart-wrap">
             <canvas id="smaChart"></canvas>
           </div>
@@ -604,24 +743,24 @@
       <!-- Notifications -->
       <div class="notif-card">
         <div class="notif-header">
-          <div class="notif-title">Alert 通知记录</div>
-          <span class="notif-count" id="notifCount">加载中...</span>
+          <div class="notif-title">Alert record</div>
+          <span class="notif-count" id="notifCount">loading...</span>
         </div>
         <table>
           <thead>
             <tr>
               <th>ID</th>
-              <th>股票</th>
-              <th>价格</th>
-              <th>条件</th>
-              <th>阈值</th>
-              <th>消息</th>
-              <th>时间</th>
+              <th>stock</th>
+              <th>price</th>
+              <th>Condition</th>
+              <th>Threshold</th>
+              <th>Message</th>
+              <th>Timestamp</th>
             </tr>
           </thead>
           <tbody id="notifBody">
             <tr>
-              <td colspan="7" class="empty-state">加载中...</td>
+              <td colspan="7" class="empty-state">loading...</td>
             </tr>
           </tbody>
         </table>
@@ -645,7 +784,6 @@
         clearTimeout(searchTimer);
         searchTimer = setTimeout(() => {
           if (val.length >= 2) {
-            // 至少输入2个字母才查询
             currentSymbol = val;
             document
               .querySelectorAll(".symbol-btn")
@@ -732,7 +870,8 @@
             );
           } else {
             showToast(
-              "获取股票数据失败：" + (stockRes.value?.detail || "未知错误"),
+              "Failed to fetch stock data: " +
+                (stockRes.value?.detail || "Unknown error"),
             );
           }
 
@@ -745,9 +884,9 @@
           }
 
           document.getElementById("lastUpdate").textContent =
-            "更新于 " + new Date().toLocaleTimeString("zh-CN");
+            "Updated at " + new Date().toLocaleTimeString("zh-CN");
         } catch (e) {
-          showToast("请求失败，请检查服务是否运行");
+          showToast("Request failed. Please check if the service is running.");
         } finally {
           showLoading(false);
         }
@@ -778,7 +917,7 @@
         sma5El.style = "";
         sma5El.textContent = fmt(analysis.sma_5);
         document.getElementById("statSma5Sub").textContent =
-          price > analysis.sma_5 ? "▲ 价格在均线上方" : "▼ 价格在均线下方";
+          price > analysis.sma_5 ? "▲ Price above SMA5" : "▼ Price below SMA5";
         document.getElementById("statSma5Sub").style.color =
           price > analysis.sma_5 ? "var(--green)" : "var(--red)";
 
@@ -788,7 +927,9 @@
         sma20El.style = "";
         sma20El.textContent = fmt(analysis.sma_20);
         document.getElementById("statSma20Sub").textContent =
-          analysis.sma_5 > analysis.sma_20 ? "▲ 金叉信号" : "▼ 死叉信号";
+          analysis.sma_5 > analysis.sma_20
+            ? "▲ Golden Cross Signal"
+            : "▼ Death Cross Signal";
         document.getElementById("statSma20Sub").style.color =
           analysis.sma_5 > analysis.sma_20 ? "var(--green)" : "var(--red)";
 
@@ -799,7 +940,7 @@
         retEl.textContent = (ret >= 0 ? "+" : "") + fmtPct(ret);
         retEl.className = "stat-value " + (ret >= 0 ? "stat-up" : "stat-down");
         document.getElementById("statReturnSub").textContent =
-          ret >= 0 ? "今日上涨" : "今日下跌";
+          ret >= 0 ? "Up Today" : "Down Today";
         document.getElementById("statReturnSub").style.color =
           ret >= 0 ? "var(--green)" : "var(--red)";
       }
@@ -866,9 +1007,8 @@
             plugins: {
               legend: { display: false },
               title: {
-                // ← 加这段
                 display: true,
-                text: currentSymbol + " 价格走势",
+                text: currentSymbol + " Price Trend",
                 font: { family: "'Syne', sans-serif", size: 13, weight: "700" },
                 color: "#1a1714",
                 padding: { bottom: 12 },
@@ -892,7 +1032,7 @@
             labels,
             datasets: [
               {
-                label: "收盘价",
+                label: "Closing Price",
                 data: closes,
                 borderColor: "#1a1714",
                 borderWidth: 2,
@@ -928,7 +1068,7 @@
             plugins: {
               title: {
                 display: true,
-                text: currentSymbol + " 均线分析",
+                text: currentSymbol + " moving average analysis",
                 font: { family: "'Syne', sans-serif", size: 13, weight: "700" },
                 color: "#1a1714",
                 padding: { bottom: 12 },
@@ -956,7 +1096,7 @@
       function updateNotifications(data) {
         const items = data.items || [];
         document.getElementById("notifCount").textContent =
-          `共 ${items.length} 条`;
+          `Total: ${items.length}`;
 
         const tbody = document.getElementById("notifBody");
         if (items.length === 0) {
@@ -968,16 +1108,16 @@
         tbody.innerHTML = items
           .map(
             (n) => `
-    <tr>
-      <td style="color:var(--text-muted)">#${n.id}</td>
-      <td><strong style="font-family:'Syne',sans-serif">${n.symbol}</strong></td>
-      <td>${fmt(n.price)}</td>
-      <td><span class="condition-pill ${n.condition}">${n.condition === "above" ? "↑ above" : "↓ below"}</span></td>
-      <td>${fmt(n.threshold)}</td>
-      <td style="color:var(--text-muted)">${n.message}</td>
-      <td style="color:var(--text-muted)">${fmtTime(n.event_timestamp)}</td>
-    </tr>
-  `,
+          <tr>
+            <td style="color:var(--text-muted)">#${n.id}</td>
+            <td><strong style="font-family:'Syne',sans-serif">${n.symbol}</strong></td>
+            <td>${fmt(n.price)}</td>
+            <td><span class="condition-pill ${n.condition}">${n.condition === "above" ? "↑ above" : "↓ below"}</span></td>
+            <td>${fmt(n.threshold)}</td>
+            <td style="color:var(--text-muted)">${n.message}</td>
+            <td style="color:var(--text-muted)">${fmtTime(n.event_timestamp)}</td>
+          </tr>
+        `,
           )
           .join("");
       }
@@ -987,6 +1127,57 @@
 
       // Auto refresh every 60 seconds
       setInterval(loadData, 60000);
+
+      const CHAT = "http://localhost:8002";
+      let chatHistory = [];
+      let chatOpen = true;
+
+      function toggleChat() {
+        const msgs = document.getElementById("chatMessages");
+        const inputRow = document.querySelector(".chat-input-row");
+        const btn = document.querySelector(".chat-toggle");
+        chatOpen = !chatOpen;
+        msgs.style.display = chatOpen ? "flex" : "none";
+        inputRow.style.display = chatOpen ? "flex" : "none";
+        btn.textContent = chatOpen ? "－" : "＋";
+      }
+
+      async function sendChat() {
+        const input = document.getElementById("chatInput");
+        const msg = input.value.trim();
+        if (!msg) return;
+        input.value = "";
+
+        appendMsg(msg, "user");
+        const loadingEl = appendMsg("思考中...", "loading");
+
+        try {
+          const res = await fetch(`${CHAT}/chat`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: msg, history: chatHistory }),
+          });
+          const data = await res.json();
+          loadingEl.remove();
+          appendMsg(data.reply, "bot");
+          chatHistory.push({ role: "user", content: msg });
+          chatHistory.push({ role: "assistant", content: data.reply });
+          if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
+        } catch (e) {
+          loadingEl.remove();
+          appendMsg("请求失败，请检查 chat_service 是否运行。", "bot");
+        }
+      }
+
+      function appendMsg(text, type) {
+        const el = document.createElement("div");
+        el.className = `msg ${type}`;
+        el.textContent = text;
+        const container = document.getElementById("chatMessages");
+        container.appendChild(el);
+        container.scrollTop = container.scrollHeight;
+        return el;
+      }
     </script>
   </body>
 </html>
