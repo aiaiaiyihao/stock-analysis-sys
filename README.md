@@ -316,4 +316,4 @@ This is expected — the tool fetches data for 20 stocks sequentially from yfina
 **Duplicate alert notifications**
 The 1-hour in-memory cooldown in `alert.py` resets on service restart. Avoid calling `GET /stocks/{symbol}` repeatedly in quick succession, or increase the cooldown window.
 
-Yihao Ai Backend Developer
+**Yihao Ai** Backend Developer
