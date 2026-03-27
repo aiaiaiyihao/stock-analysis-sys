@@ -1,6 +1,6 @@
 # StockAnalyzer
 
-A real-time stock monitoring system built on a microservices architecture. Supports live price fetching, technical indicator analysis, alert triggering via Kafka, and persistent notifications in PostgreSQL.
+A real-time stock monitoring system built on a microservices architecture. Supports live price fetching, technical indicator analysis, Kafka-driven alert pipelines, persistent notifications in PostgreSQL, and an AI-powered stock assistant powered by LangChain and Ollama.
 
 ---
 
@@ -16,8 +16,17 @@ Kafka (stock-alerts topic)
 notification_service (FastAPI :8001)
      ↓
 PostgreSQL (notifications table)
-     ↑
+
+chat_service (FastAPI :8002)
+  ├── LangChain Agent + Ollama (LLaMA 3.1)
+  ├── Tool: get_stock_price     → main_service
+  ├── Tool: get_top_movers      → yfinance
+  └── Tool: get_notifications   → notification_service
+
 Dashboard (dashboard.html)
+  ├── Price & SMA charts (Chart.js)
+  ├── Alert notification table
+  └── AI Chat Assistant
 ```
 
 ---
@@ -27,6 +36,7 @@ Dashboard (dashboard.html)
 ```
 StockAnalyzer/
 ├── docker-compose.yml
+├── .env                            # OLLAMA_BASE_URL (optional)
 ├── dashboard.html                  # Frontend Dashboard
 ├── README.md
 ├── main_service/
@@ -35,16 +45,22 @@ StockAnalyzer/
 │   ├── main.py                     # FastAPI entry point
 │   ├── fetch.py                    # yfinance data fetching
 │   ├── analysis.py                 # Technical indicator calculation
-│   ├── alert.py                    # Alert rules and trigger logic
+│   ├── alert.py                    # Alert rules and cooldown logic
 │   └── kafka_producer.py           # Kafka message publisher
-└── notification_service/
+├── notification_service/
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   ├── main.py                     # FastAPI entry point
+│   ├── consumer.py                 # Kafka consumer
+│   ├── database.py                 # SQLAlchemy database connection
+│   ├── models.py                   # ORM models
+│   └── schemas.py                  # Pydantic schemas
+└── chat_service/
     ├── Dockerfile
     ├── requirements.txt
     ├── main.py                     # FastAPI entry point
-    ├── consumer.py                 # Kafka consumer
-    ├── database.py                 # SQLAlchemy database connection
-    ├── models.py                   # ORM models
-    └── schemas.py                  # Pydantic schemas
+    ├── agent.py                    # LangChain ReAct agent
+    └── tools.py                    # Custom LangChain tools
 ```
 
 ---
@@ -54,9 +70,23 @@ StockAnalyzer/
 ### Prerequisites
 
 - Docker & Docker Compose
+- [Ollama](https://ollama.com) installed and running locally
 - A browser (for the Dashboard)
 
-### Start All Services
+### 1. Install and Start Ollama
+
+```bash
+# Install Ollama (Mac)
+brew install ollama
+
+# Pull the model
+ollama pull llama3.1
+
+# Start Ollama
+ollama serve
+```
+
+### 2. Start All Services
 
 ```bash
 # Clone the repository
@@ -75,9 +105,11 @@ Once running, services are available at:
 | main_service API Docs         | http://localhost:8000/docs                     |
 | notification_service          | http://localhost:8001                          |
 | notification_service API Docs | http://localhost:8001/docs                     |
+| chat_service                  | http://localhost:8002                          |
+| chat_service API Docs         | http://localhost:8002/docs                     |
 | Dashboard                     | Open `dashboard.html` directly in your browser |
 
-### Stop All Services
+### 3. Stop All Services
 
 ```bash
 docker-compose down
@@ -91,7 +123,7 @@ docker-compose down
 
 #### `GET /stocks/{symbol}`
 
-Fetches the latest stock price, checks alert rules, and publishes to Kafka if triggered.
+Fetches the latest stock price, evaluates alert rules, and publishes to Kafka if triggered.
 
 **Example Request**
 
@@ -117,17 +149,9 @@ GET http://localhost:8000/stocks/AAPL
 }
 ```
 
----
-
 #### `GET /stocks/{symbol}/analysis`
 
 Returns technical indicators: SMA5, SMA20, and daily return.
-
-**Example Request**
-
-```
-GET http://localhost:8000/stocks/AAPL/analysis
-```
 
 **Example Response**
 
@@ -147,7 +171,7 @@ GET http://localhost:8000/stocks/AAPL/analysis
 
 #### `GET /notifications`
 
-Returns all saved alert notification records from the database.
+Returns all saved alert notification records ordered by most recent.
 
 **Example Response**
 
@@ -171,9 +195,41 @@ Returns all saved alert notification records from the database.
 
 ---
 
+### chat_service (port 8002)
+
+#### `POST /chat`
+
+Send a natural language message to the AI stock assistant. Supports conversation history.
+
+**Request Body**
+
+```json
+{
+  "message": "今天涨幅最大的股票是哪些？",
+  "history": []
+}
+```
+
+**Example Response**
+
+```json
+{
+  "reply": "今日涨幅最大的股票：\n▲ NVDA: $875.40 (+3.21%)\n▲ META: $512.30 (+2.87%)..."
+}
+```
+
+**Example prompts:**
+
+- `"今天涨幅最大的股票"` — top gainers from a watchlist of 20 stocks
+- `"AAPL 现在多少钱"` — latest price and technical indicators
+- `"有哪些 Alert 记录"` — recent alert notification history
+- `"特斯拉现在的价格"` — supports Chinese company name mapping
+
+---
+
 ## Alert Rules
 
-Default rules are defined in `main_service/alert.py`:
+Default rules defined in `main_service/alert.py`:
 
 | Symbol | Condition | Threshold |
 | ------ | --------- | --------- |
@@ -181,7 +237,21 @@ Default rules are defined in `main_service/alert.py`:
 | TSLA   | Price ≤   | $150      |
 | NVDA   | Price ≥   | $1000     |
 
-> Once an alert is triggered for a symbol, a 1-hour cooldown prevents duplicate alerts. The cooldown resets if the service is restarted.
+> A 1-hour cooldown prevents duplicate alerts for the same symbol. The cooldown resets on service restart. To persist cooldown state across restarts, store the last-triggered timestamp in the database.
+
+---
+
+## AI Stock Assistant
+
+The chat assistant is powered by a **LangChain ReAct Agent** running **LLaMA 3.1** locally via Ollama. It has access to three custom tools:
+
+| Tool                | Description                                                  |
+| ------------------- | ------------------------------------------------------------ |
+| `get_stock_price`   | Fetches latest price, SMA5, SMA20, daily return, and alert status for any symbol |
+| `get_top_movers`    | Scans a watchlist of 20 stocks and ranks by daily % change   |
+| `get_notifications` | Retrieves alert history from the notification service        |
+
+The agent reasons step-by-step (ReAct pattern) and responds in Chinese. It also maps common Chinese company names to ticker symbols (e.g. 苹果 → AAPL, 特斯拉 → TSLA, 英伟达 → NVDA).
 
 ---
 
@@ -191,24 +261,24 @@ Open `dashboard.html` directly in your browser — no extra server needed.
 
 **Features:**
 
-- Switch between AAPL / TSLA / NVDA, or type any custom symbol in the search box
-- Live stats cards: latest price, SMA5, SMA20, daily return
+- Quick-select buttons for AAPL, TSLA, NVDA — or type any symbol in the search box
+- Live stat cards: latest price, SMA5, SMA20, daily return with trend indicators
 - Price trend chart (last 5 trading days)
-- Moving average chart (SMA5 vs SMA20 vs Close, last 1 month)
+- Moving average chart — SMA5 vs SMA20 vs Close (last 1 month)
 - Alert notification history table
-
-> Make sure your Docker containers are running before opening the Dashboard.
+- Embedded AI chat assistant (bottom-right corner)
 
 **How the frontend connects to the backend:**
 
-The Dashboard uses the browser's `fetch()` API to call your FastAPI services directly:
+The Dashboard calls the FastAPI services directly from the browser using `fetch()`:
 
 ```javascript
 const MAIN = 'http://localhost:8000';
 const NOTIF = 'http://localhost:8001';
+const CHAT = 'http://localhost:8002';
 ```
 
-Docker Compose maps container ports to your local machine, so `localhost:8000` reaches the `main_service` container. CORS middleware is required on both FastAPI services to allow the browser to make cross-origin requests from the local HTML file.
+Docker Compose maps container ports to localhost. CORS middleware is enabled on all three services to allow cross-origin requests from the local HTML file.
 
 ---
 
@@ -220,6 +290,7 @@ Docker Compose maps container ports to your local machine, so `localhost:8000` r
 | Stock Data       | yfinance                           |
 | Message Queue    | Apache Kafka (Confluent)           |
 | Database         | PostgreSQL + SQLAlchemy            |
+| AI Agent         | LangChain + Ollama (LLaMA 3.1)     |
 | Containerization | Docker + Docker Compose            |
 | Frontend         | HTML / CSS / JavaScript + Chart.js |
 
@@ -228,15 +299,21 @@ Docker Compose maps container ports to your local machine, so `localhost:8000` r
 ## Troubleshooting
 
 **Dashboard shows no data**
-Make sure both FastAPI services have CORS middleware enabled and that all Docker containers are running.
+Ensure CORS middleware is added to all three FastAPI services and all Docker containers are running.
 
 **main_service fails to start**
-Ensure `kafka-python` is listed in `main_service/requirements.txt`, then run `docker-compose up --build` again.
+Make sure `kafka-python` is in `main_service/requirements.txt`, then rebuild with `docker-compose up --build`.
 
 **notification_service cannot connect to the database**
-Check that `DB_HOST` is set to `postgres` (the service name) in `docker-compose.yml` — not `localhost`.
+Set `DB_HOST` to `postgres` (the Docker service name) in `docker-compose.yml`, not `localhost`.
 
-**Duplicate alert notifications keep appearing**
-The 1-hour cooldown in `alert.py` prevents repeated alerts, but it resets on service restart. To make the cooldown persistent across restarts, store the last-triggered timestamp in the database instead of in memory.
+**chat_service returns "request failed"**
+Check that Ollama is running locally (`ollama serve`) and the model is pulled (`ollama pull llama3.1`). The container connects to Ollama via `host.docker.internal:11434`.
+
+**Top movers query is slow**
+This is expected — the tool fetches data for 20 stocks sequentially from yfinance. Response time is typically 15–30 seconds.
+
+**Duplicate alert notifications**
+The 1-hour in-memory cooldown in `alert.py` resets on service restart. Avoid calling `GET /stocks/{symbol}` repeatedly in quick succession, or increase the cooldown window.
 
 Yihao Ai Backend Developer
