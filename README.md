@@ -1,227 +1,242 @@
-# 📊 StockAnalyzer
+# StockAnalyzer
 
-A real-time stock data analysis system built with microservices architecture. It collects market data, processes indicators, triggers alerts, and visualizes insights through dashboards.
+A real-time stock monitoring system built on a microservices architecture. Supports live price fetching, technical indicator analysis, alert triggering via Kafka, and persistent notifications in PostgreSQL.
 
 ---
 
-## 🚀 System Architecture
-
-The system follows a **microservices + event-driven architecture**:
-
-* **Data Ingestion Service** → Fetches stock data (e.g., yfinance)
-* **Processing Service** → Calculates indicators (moving averages, etc.)
-* **Notification Service** → Sends alerts based on rules
-* **Kafka** → Event streaming between services
-* **PostgreSQL** → Persistent storage
-* **Redis** → Caching layer
-* **Dashboard** → Data visualization
-
-**Data Flow:**
+## System Architecture
 
 ```
-Data Source → Ingestion Service → Kafka → Processing Service → Database/Redis
-                                              ↓
-                                      Notification Service → Alerts
-                                              ↓
-                                          Dashboard
+yfinance API
+     ↓
+main_service (FastAPI :8000)
+     ↓  Alert triggered
+Kafka (stock-alerts topic)
+     ↓
+notification_service (FastAPI :8001)
+     ↓
+PostgreSQL (notifications table)
+     ↑
+Dashboard (dashboard.html)
 ```
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 StockAnalyzer/
-│
-├── ingestion_service/       # Fetch stock data
-├── processing_service/      # Data processing & indicators
-├── notification_service/   # Alert system
-├── common/                 # Shared utilities (models, configs)
-├── docker/                 # Docker configs
 ├── docker-compose.yml
-├── requirements.txt
-└── README.md
+├── dashboard.html                  # Frontend Dashboard
+├── README.md
+├── main_service/
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   ├── main.py                     # FastAPI entry point
+│   ├── fetch.py                    # yfinance data fetching
+│   ├── analysis.py                 # Technical indicator calculation
+│   ├── alert.py                    # Alert rules and trigger logic
+│   └── kafka_producer.py           # Kafka message publisher
+└── notification_service/
+    ├── Dockerfile
+    ├── requirements.txt
+    ├── main.py                     # FastAPI entry point
+    ├── consumer.py                 # Kafka consumer
+    ├── database.py                 # SQLAlchemy database connection
+    ├── models.py                   # ORM models
+    └── schemas.py                  # Pydantic schemas
 ```
 
 ---
 
-## ⚡ Quick Start
+## Getting Started
 
-### 1. Clone the repository
+### Prerequisites
+
+- Docker & Docker Compose
+- A browser (for the Dashboard)
+
+### Start All Services
 
 ```bash
+# Clone the repository
 git clone <your-repo-url>
 cd StockAnalyzer
+
+# Build and start all services
+docker-compose up --build
 ```
 
-### 2. Start infrastructure (Kafka + PostgreSQL + Redis)
+Once running, services are available at:
+
+| Service                       | URL                                            |
+| ----------------------------- | ---------------------------------------------- |
+| main_service                  | http://localhost:8000                          |
+| main_service API Docs         | http://localhost:8000/docs                     |
+| notification_service          | http://localhost:8001                          |
+| notification_service API Docs | http://localhost:8001/docs                     |
+| Dashboard                     | Open `dashboard.html` directly in your browser |
+
+### Stop All Services
 
 ```bash
-docker-compose up -d
+docker-compose down
 ```
-
-### 3. Install dependencies (for each service)
-
-```bash
-pip install -r requirements.txt
-```
-
-### 4. Run services
-
-Example:
-
-```bash
-uvicorn main:app --host 0.0.0.0 --port 8000
-```
-
-Start each service on different ports:
-
-* ingestion_service → 8000
-* processing_service → 8001
-* notification_service → 8002
 
 ---
 
-## 📡 API Documentation
+## API Reference
 
-### 🔹 Example: Fetch Stock Data
+### main_service (port 8000)
 
-**Request:**
+#### `GET /stocks/{symbol}`
 
-```http
-GET /stocks/{symbol}
+Fetches the latest stock price, checks alert rules, and publishes to Kafka if triggered.
+
+**Example Request**
+
+```
+GET http://localhost:8000/stocks/AAPL
 ```
 
-**Response:**
+**Example Response**
 
 ```json
 {
   "symbol": "AAPL",
-  "price": 185.32,
-  "timestamp": "2026-03-26T12:00:00Z"
+  "latest_price": 252.89,
+  "alert_triggered": true,
+  "alert": {
+    "symbol": "AAPL",
+    "price": 252.89,
+    "condition": "above",
+    "threshold": 220,
+    "message": "AAPL crossed above 220"
+  },
+  "published_to_kafka": true
 }
 ```
 
 ---
 
-### 🔹 Example: Trigger Alert Rule
+#### `GET /stocks/{symbol}/analysis`
 
-**Request:**
+Returns technical indicators: SMA5, SMA20, and daily return.
 
-```http
-POST /alerts
+**Example Request**
+
 ```
+GET http://localhost:8000/stocks/AAPL/analysis
+```
+
+**Example Response**
 
 ```json
 {
   "symbol": "AAPL",
-  "condition": "price > 200"
+  "latest_close": 252.89,
+  "sma_5": 251.33,
+  "sma_20": 256.14,
+  "daily_return": 0.00107
 }
 ```
 
-**Response:**
+---
+
+### notification_service (port 8001)
+
+#### `GET /notifications`
+
+Returns all saved alert notification records from the database.
+
+**Example Response**
 
 ```json
 {
-  "status": "rule_created"
+  "count": 1,
+  "items": [
+    {
+      "id": 1,
+      "symbol": "AAPL",
+      "price": 252.89,
+      "condition": "above",
+      "threshold": 220.0,
+      "message": "AAPL crossed above 220",
+      "event_timestamp": "2026-03-26T23:45:26+00:00",
+      "created_at": "2026-03-26T23:45:26+00:00"
+    }
+  ]
 }
 ```
 
 ---
 
-## 🚨 Alert Rules
+## Alert Rules
 
-Alert rules are based on conditions such as:
+Default rules are defined in `main_service/alert.py`:
 
-* Price thresholds
-* Moving average crossover
-* Volume spikes
+| Symbol | Condition | Threshold |
+| ------ | --------- | --------- |
+| AAPL   | Price ≥   | $220      |
+| TSLA   | Price ≤   | $150      |
+| NVDA   | Price ≥   | $1000     |
 
-**Example:**
+> Once an alert is triggered for a symbol, a 1-hour cooldown prevents duplicate alerts. The cooldown resets if the service is restarted.
 
-```text
-IF price > 200 → Trigger alert
-IF MA50 crosses MA200 → Trigger alert
+---
+
+## Dashboard
+
+Open `dashboard.html` directly in your browser — no extra server needed.
+
+**Features:**
+
+- Switch between AAPL / TSLA / NVDA, or type any custom symbol in the search box
+- Live stats cards: latest price, SMA5, SMA20, daily return
+- Price trend chart (last 5 trading days)
+- Moving average chart (SMA5 vs SMA20 vs Close, last 1 month)
+- Alert notification history table
+
+> Make sure your Docker containers are running before opening the Dashboard.
+
+**How the frontend connects to the backend:**
+
+The Dashboard uses the browser's `fetch()` API to call your FastAPI services directly:
+
+```javascript
+const MAIN = 'http://localhost:8000';
+const NOTIF = 'http://localhost:8001';
 ```
 
-Alerts are processed asynchronously via Kafka.
+Docker Compose maps container ports to your local machine, so `localhost:8000` reaches the `main_service` container. CORS middleware is required on both FastAPI services to allow the browser to make cross-origin requests from the local HTML file.
 
 ---
 
-## 📊 Dashboard Usage
+## Tech Stack
 
-The dashboard allows you to:
-
-* View real-time stock prices
-* Monitor indicators (MA, trends)
-* Track triggered alerts
-* Analyze historical data
-
-Access via:
-
-```
-http://localhost:<dashboard-port>
-```
+| Layer            | Technology                         |
+| ---------------- | ---------------------------------- |
+| Web Framework    | FastAPI + Uvicorn                  |
+| Stock Data       | yfinance                           |
+| Message Queue    | Apache Kafka (Confluent)           |
+| Database         | PostgreSQL + SQLAlchemy            |
+| Containerization | Docker + Docker Compose            |
+| Frontend         | HTML / CSS / JavaScript + Chart.js |
 
 ---
 
-## 🧰 Tech Stack
+## Troubleshooting
 
-* **Backend:** FastAPI
-* **Streaming:** Kafka
-* **Database:** PostgreSQL
-* **Cache:** Redis
-* **Visualization:** Plotly / Dashboard UI
-* **Containerization:** Docker
+**Dashboard shows no data**
+Make sure both FastAPI services have CORS middleware enabled and that all Docker containers are running.
 
----
+**main_service fails to start**
+Ensure `kafka-python` is listed in `main_service/requirements.txt`, then run `docker-compose up --build` again.
 
-## ❓ FAQ
+**notification_service cannot connect to the database**
+Check that `DB_HOST` is set to `postgres` (the service name) in `docker-compose.yml` — not `localhost`.
 
-### Q: Should I start Docker first?
-
-Yes. Always run:
-
-```bash
-docker-compose up -d
-```
-
-before starting FastAPI services.
-
----
-
-### Q: Can I run services locally without Docker?
-
-Yes, but you still need Kafka, PostgreSQL, and Redis running.
-
----
-
-### Q: Why is my service not connecting to Kafka/Postgres?
-
-Check:
-
-* Environment variables
-* Docker containers are running
-* Correct ports (e.g., `localhost:5432`)
-
----
-
-### Q: Can I extend this system?
-
-Yes! You can add:
-
-* More indicators
-* AI/ML models (e.g., prediction)
-* Additional notification channels (email, SMS)
-
----
-
-## ✅ Notes
-
-* Make sure all services use the same Kafka topic configuration
-* Use `.env` files for environment variables
-* Logging is recommended for debugging distributed systems
-
----
+**Duplicate alert notifications keep appearing**
+The 1-hour cooldown in `alert.py` prevents repeated alerts, but it resets on service restart. To make the cooldown persistent across restarts, store the last-triggered timestamp in the database instead of in memory.
 
 Yihao Ai Backend Developer
