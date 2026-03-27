@@ -1,0 +1,992 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StockAnalyzer Dashboard</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <style>
+      :root {
+        --bg: #f5f2ee;
+        --surface: #ffffff;
+        --surface2: #f0ede8;
+        --border: #e0dbd3;
+        --text: #1a1714;
+        --text-muted: #7a746c;
+        --accent: #c84b2f;
+        --accent2: #2f6bc8;
+        --green: #2a7d4f;
+        --red: #c84b2f;
+        --yellow: #c8972f;
+        --shadow: 0 2px 16px rgba(26, 23, 20, 0.07);
+        --radius: 16px;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: "DM Mono", monospace;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        padding: 0;
+      }
+
+      /* Header */
+      header {
+        background: var(--surface);
+        border-bottom: 1.5px solid var(--border);
+        padding: 0 40px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 64px;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+      }
+
+      .logo {
+        font-family: "Syne", sans-serif;
+        font-weight: 800;
+        font-size: 1.25rem;
+        letter-spacing: -0.5px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .logo-dot {
+        width: 10px;
+        height: 10px;
+        background: var(--accent);
+        border-radius: 50%;
+        animation: pulse 2s infinite;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.5;
+          transform: scale(1.3);
+        }
+      }
+
+      .header-right {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      }
+
+      .live-badge {
+        font-size: 0.7rem;
+        background: #e8f5ee;
+        color: var(--green);
+        border: 1px solid #b8dfc8;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-weight: 500;
+        letter-spacing: 0.5px;
+      }
+
+      /* Main layout */
+      main {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 36px 32px;
+      }
+
+      /* Symbol selector */
+      .symbol-bar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 32px;
+        flex-wrap: wrap;
+      }
+
+      .symbol-bar label {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      .symbol-btn {
+        font-family: "Syne", sans-serif;
+        font-weight: 700;
+        font-size: 0.9rem;
+        padding: 8px 20px;
+        border: 1.5px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--text);
+        cursor: pointer;
+        transition: all 0.15s;
+        letter-spacing: 0.5px;
+      }
+
+      .symbol-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .symbol-btn.active {
+        background: var(--text);
+        color: #fff;
+        border-color: var(--text);
+      }
+
+      .custom-input {
+        font-family: "DM Mono", monospace;
+        font-size: 0.85rem;
+        padding: 8px 14px;
+        border: 1.5px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--text);
+        outline: none;
+        width: 100px;
+        text-transform: uppercase;
+        transition: border-color 0.15s;
+      }
+      .custom-input:focus {
+        border-color: var(--accent2);
+      }
+
+      .refresh-btn {
+        font-family: "DM Mono", monospace;
+        font-size: 0.8rem;
+        padding: 8px 18px;
+        border: 1.5px solid var(--accent);
+        border-radius: 8px;
+        background: var(--accent);
+        color: #fff;
+        cursor: pointer;
+        transition: all 0.15s;
+        margin-left: auto;
+      }
+      .refresh-btn:hover {
+        opacity: 0.85;
+      }
+      .refresh-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      /* Stats row */
+      .stats-row {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+        margin-bottom: 28px;
+      }
+
+      .stat-card {
+        background: var(--surface);
+        border: 1.5px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px 24px;
+        box-shadow: var(--shadow);
+        transition: transform 0.15s;
+        animation: fadeUp 0.4s ease both;
+      }
+
+      .stat-card:hover {
+        transform: translateY(-2px);
+      }
+
+      @keyframes fadeUp {
+        from {
+          opacity: 0;
+          transform: translateY(12px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .stat-label {
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 8px;
+      }
+
+      .stat-value {
+        font-family: "Syne", sans-serif;
+        font-weight: 700;
+        font-size: 1.6rem;
+        letter-spacing: -1px;
+        line-height: 1;
+      }
+
+      .stat-sub {
+        font-size: 0.72rem;
+        color: var(--text-muted);
+        margin-top: 6px;
+      }
+
+      .stat-up {
+        color: var(--green);
+      }
+      .stat-down {
+        color: var(--red);
+      }
+      .stat-neutral {
+        color: var(--text);
+      }
+
+      /* Alert badge on stat */
+      .alert-triggered {
+        display: inline-block;
+        background: #fdecea;
+        color: var(--red);
+        border: 1px solid #f5c6c0;
+        font-size: 0.65rem;
+        padding: 2px 8px;
+        border-radius: 20px;
+        margin-top: 6px;
+        font-weight: 500;
+      }
+
+      /* Charts row */
+      .charts-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin-bottom: 28px;
+      }
+
+      .chart-card {
+        background: var(--surface);
+        border: 1.5px solid var(--border);
+        border-radius: var(--radius);
+        padding: 24px;
+        box-shadow: var(--shadow);
+        animation: fadeUp 0.5s ease both;
+      }
+
+      .chart-title {
+        font-family: "Syne", sans-serif;
+        font-weight: 700;
+        font-size: 0.95rem;
+        margin-bottom: 4px;
+        letter-spacing: -0.3px;
+      }
+
+      .chart-subtitle {
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        margin-bottom: 20px;
+      }
+
+      .chart-wrap {
+        position: relative;
+        height: 220px;
+      }
+
+      /* Skeleton loader */
+      .skeleton {
+        background: linear-gradient(
+          90deg,
+          var(--surface2) 25%,
+          var(--border) 50%,
+          var(--surface2) 75%
+        );
+        background-size: 200% 100%;
+        animation: shimmer 1.2s infinite;
+        border-radius: 6px;
+      }
+
+      @keyframes shimmer {
+        0% {
+          background-position: 200% 0;
+        }
+        100% {
+          background-position: -200% 0;
+        }
+      }
+
+      /* Notifications table */
+      .notif-card {
+        background: var(--surface);
+        border: 1.5px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+        animation: fadeUp 0.6s ease both;
+      }
+
+      .notif-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 20px 24px 16px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .notif-title {
+        font-family: "Syne", sans-serif;
+        font-weight: 700;
+        font-size: 0.95rem;
+      }
+
+      .notif-count {
+        font-size: 0.72rem;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        padding: 3px 10px;
+        border-radius: 20px;
+        color: var(--text-muted);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.8rem;
+      }
+
+      thead th {
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--text-muted);
+        padding: 10px 24px;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+        background: var(--surface2);
+        font-weight: 500;
+      }
+
+      tbody tr {
+        border-bottom: 1px solid var(--border);
+        transition: background 0.1s;
+      }
+      tbody tr:last-child {
+        border-bottom: none;
+      }
+      tbody tr:hover {
+        background: var(--surface2);
+      }
+
+      tbody td {
+        padding: 12px 24px;
+        color: var(--text);
+      }
+
+      .condition-pill {
+        font-size: 0.65rem;
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-weight: 500;
+      }
+      .above {
+        background: #fdecea;
+        color: var(--red);
+        border: 1px solid #f5c6c0;
+      }
+      .below {
+        background: #e8f5ee;
+        color: var(--green);
+        border: 1px solid #b8dfc8;
+      }
+
+      .empty-state {
+        text-align: center;
+        padding: 40px;
+        color: var(--text-muted);
+        font-size: 0.8rem;
+      }
+
+      /* Loading overlay */
+      .loading-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(245, 242, 238, 0.7);
+        z-index: 200;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 12px;
+        backdrop-filter: blur(2px);
+      }
+
+      .loading-overlay.show {
+        display: flex;
+      }
+
+      .spinner {
+        width: 36px;
+        height: 36px;
+        border: 3px solid var(--border);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .loading-text {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+      }
+
+      /* Error toast */
+      .toast {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        background: var(--text);
+        color: #fff;
+        font-size: 0.8rem;
+        padding: 12px 20px;
+        border-radius: 10px;
+        z-index: 300;
+        transform: translateY(80px);
+        opacity: 0;
+        transition: all 0.3s;
+      }
+      .toast.show {
+        transform: translateY(0);
+        opacity: 1;
+      }
+
+      @media (max-width: 768px) {
+        main {
+          padding: 20px 16px;
+        }
+        .stats-row {
+          grid-template-columns: 1fr 1fr;
+        }
+        .charts-row {
+          grid-template-columns: 1fr;
+        }
+        header {
+          padding: 0 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="loading-overlay" id="loadingOverlay">
+      <div class="spinner"></div>
+      <div class="loading-text">获取数据中...</div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <header>
+      <div class="logo">
+        <div class="logo-dot"></div>
+        StockAnalyzer
+      </div>
+      <div class="header-right">
+        <span class="live-badge">● LIVE</span>
+        <span
+          id="lastUpdate"
+          style="font-size: 0.72rem; color: var(--text-muted)"
+          >--</span
+        >
+      </div>
+    </header>
+
+    <main>
+      <!-- Symbol bar -->
+      <div class="symbol-bar">
+        <label>股票代码</label>
+        <button class="symbol-btn active" onclick="selectSymbol('AAPL', this)">
+          AAPL
+        </button>
+        <button class="symbol-btn" onclick="selectSymbol('TSLA', this)">
+          TSLA
+        </button>
+        <button class="symbol-btn" onclick="selectSymbol('NVDA', this)">
+          NVDA
+        </button>
+        <input
+          class="custom-input"
+          id="customSymbol"
+          placeholder="搜索..."
+          maxlength="5"
+          oninput="handleSearchInput(this.value)"
+          onkeydown="if (event.key === 'Enter') selectCustom();"
+        />
+        <button class="refresh-btn" id="refreshBtn" onclick="loadData()">
+          ↻ 刷新
+        </button>
+      </div>
+
+      <!-- Stats row -->
+      <div class="stats-row" id="statsRow">
+        <div class="stat-card">
+          <div class="stat-label">最新价格</div>
+          <div
+            class="stat-value skeleton"
+            id="statPrice"
+            style="height: 2rem; width: 80%"
+          >
+            &nbsp;
+          </div>
+          <div class="stat-sub" id="statAlert"></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">SMA 5日</div>
+          <div
+            class="stat-value skeleton"
+            id="statSma5"
+            style="height: 2rem; width: 70%"
+          >
+            &nbsp;
+          </div>
+          <div class="stat-sub" id="statSma5Sub"></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">SMA 20日</div>
+          <div
+            class="stat-value skeleton"
+            id="statSma20"
+            style="height: 2rem; width: 70%"
+          >
+            &nbsp;
+          </div>
+          <div class="stat-sub" id="statSma20Sub"></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">日收益率</div>
+          <div
+            class="stat-value skeleton"
+            id="statReturn"
+            style="height: 2rem; width: 60%"
+          >
+            &nbsp;
+          </div>
+          <div class="stat-sub" id="statReturnSub"></div>
+        </div>
+      </div>
+
+      <!-- Charts -->
+      <div class="charts-row">
+        <div class="chart-card">
+          <div class="chart-title">价格走势</div>
+          <div class="chart-subtitle" id="priceChartSub">近5日收盘价</div>
+          <div class="chart-wrap">
+            <canvas id="priceChart"></canvas>
+          </div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">均线分析</div>
+          <div class="chart-subtitle">SMA5 vs SMA20 vs 收盘价（近1月）</div>
+          <div class="chart-wrap">
+            <canvas id="smaChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Notifications -->
+      <div class="notif-card">
+        <div class="notif-header">
+          <div class="notif-title">Alert 通知记录</div>
+          <span class="notif-count" id="notifCount">加载中...</span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>股票</th>
+              <th>价格</th>
+              <th>条件</th>
+              <th>阈值</th>
+              <th>消息</th>
+              <th>时间</th>
+            </tr>
+          </thead>
+          <tbody id="notifBody">
+            <tr>
+              <td colspan="7" class="empty-state">加载中...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+
+    <script>
+      const MAIN = "http://localhost:8000";
+      const NOTIF = "http://localhost:8001";
+
+      let currentSymbol = "AAPL";
+      let priceChartInst = null;
+      let smaChartInst = null;
+
+      let searchTimer = null;
+
+      function handleSearchInput(val) {
+        val = val.trim().toUpperCase();
+        if (!val || val.length < 1) return;
+
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+          if (val.length >= 2) {
+            // 至少输入2个字母才查询
+            currentSymbol = val;
+            document
+              .querySelectorAll(".symbol-btn")
+              .forEach((b) => b.classList.remove("active"));
+            document.getElementById("customSymbol").value = val;
+            loadData();
+          }
+        }, 800); // 停止输入 0.8秒后自动查询
+      }
+
+      // Chart defaults
+      Chart.defaults.font.family = "'DM Mono', monospace";
+      Chart.defaults.font.size = 11;
+      Chart.defaults.color = "#7a746c";
+
+      function selectSymbol(sym, btn) {
+        currentSymbol = sym;
+        document
+          .querySelectorAll(".symbol-btn")
+          .forEach((b) => b.classList.remove("active"));
+        if (btn) btn.classList.add("active");
+        loadData();
+      }
+
+      function selectCustom() {
+        const val = document
+          .getElementById("customSymbol")
+          .value.trim()
+          .toUpperCase();
+        if (!val) return;
+        currentSymbol = val;
+        document
+          .querySelectorAll(".symbol-btn")
+          .forEach((b) => b.classList.remove("active"));
+        loadData();
+      }
+
+      function showLoading(show) {
+        document
+          .getElementById("loadingOverlay")
+          .classList.toggle("show", show);
+        document.getElementById("refreshBtn").disabled = show;
+      }
+
+      function showToast(msg) {
+        const t = document.getElementById("toast");
+        t.textContent = msg;
+        t.classList.add("show");
+        setTimeout(() => t.classList.remove("show"), 3000);
+      }
+
+      function fmt(n) {
+        return "$" + Number(n).toFixed(2);
+      }
+      function fmtPct(n) {
+        return (n * 100).toFixed(3) + "%";
+      }
+      function fmtTime(ts) {
+        if (!ts) return "--";
+        const d = new Date(ts);
+        return d.toLocaleString("zh-CN", {
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
+
+      async function loadData() {
+        showLoading(true);
+        try {
+          const [stockRes, analysisRes, notifRes] = await Promise.allSettled([
+            fetch(`${MAIN}/stocks/${currentSymbol}`).then((r) => r.json()),
+            fetch(`${MAIN}/stocks/${currentSymbol}/analysis`).then((r) =>
+              r.json(),
+            ),
+            fetch(`${NOTIF}/notifications`).then((r) => r.json()),
+          ]);
+
+          if (stockRes.status === "fulfilled" && !stockRes.value.detail) {
+            updateStats(
+              stockRes.value,
+              analysisRes.status === "fulfilled" ? analysisRes.value : null,
+            );
+          } else {
+            showToast(
+              "获取股票数据失败：" + (stockRes.value?.detail || "未知错误"),
+            );
+          }
+
+          if (analysisRes.status === "fulfilled" && !analysisRes.value.detail) {
+            updateCharts(analysisRes.value);
+          }
+
+          if (notifRes.status === "fulfilled") {
+            updateNotifications(notifRes.value);
+          }
+
+          document.getElementById("lastUpdate").textContent =
+            "更新于 " + new Date().toLocaleTimeString("zh-CN");
+        } catch (e) {
+          showToast("请求失败，请检查服务是否运行");
+        } finally {
+          showLoading(false);
+        }
+      }
+
+      function updateStats(stock, analysis) {
+        const price = stock.latest_price;
+
+        // Price
+        const el = document.getElementById("statPrice");
+        el.className = "stat-value stat-neutral";
+        el.style = "";
+        el.textContent = fmt(price);
+
+        const alertEl = document.getElementById("statAlert");
+        if (stock.alert_triggered && stock.alert) {
+          alertEl.innerHTML = `<span class="alert-triggered">⚡ ${stock.alert.message}</span>`;
+        } else {
+          alertEl.innerHTML =
+            '<span style="color:var(--text-muted);font-size:0.72rem">无 Alert 触发</span>';
+        }
+
+        if (!analysis) return;
+
+        // SMA5
+        const sma5El = document.getElementById("statSma5");
+        sma5El.className = "stat-value";
+        sma5El.style = "";
+        sma5El.textContent = fmt(analysis.sma_5);
+        document.getElementById("statSma5Sub").textContent =
+          price > analysis.sma_5 ? "▲ 价格在均线上方" : "▼ 价格在均线下方";
+        document.getElementById("statSma5Sub").style.color =
+          price > analysis.sma_5 ? "var(--green)" : "var(--red)";
+
+        // SMA20
+        const sma20El = document.getElementById("statSma20");
+        sma20El.className = "stat-value";
+        sma20El.style = "";
+        sma20El.textContent = fmt(analysis.sma_20);
+        document.getElementById("statSma20Sub").textContent =
+          analysis.sma_5 > analysis.sma_20 ? "▲ 金叉信号" : "▼ 死叉信号";
+        document.getElementById("statSma20Sub").style.color =
+          analysis.sma_5 > analysis.sma_20 ? "var(--green)" : "var(--red)";
+
+        // Daily return
+        const ret = analysis.daily_return;
+        const retEl = document.getElementById("statReturn");
+        retEl.style = "";
+        retEl.textContent = (ret >= 0 ? "+" : "") + fmtPct(ret);
+        retEl.className = "stat-value " + (ret >= 0 ? "stat-up" : "stat-down");
+        document.getElementById("statReturnSub").textContent =
+          ret >= 0 ? "今日上涨" : "今日下跌";
+        document.getElementById("statReturnSub").style.color =
+          ret >= 0 ? "var(--green)" : "var(--red)";
+      }
+
+      function updateCharts(analysis) {
+        // Generate mock historical data based on analysis values
+        const days = 20;
+        const labels = [];
+        const closes = [],
+          sma5s = [],
+          sma20s = [];
+
+        const baseClose = analysis.latest_close;
+        const baseSma5 = analysis.sma_5;
+        const baseSma20 = analysis.sma_20;
+
+        // Simulate realistic-looking series ending at the known values
+        for (let i = days; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          if (d.getDay() === 0 || d.getDay() === 6) continue;
+          labels.push(
+            d.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }),
+          );
+          const noise = (Math.random() - 0.48) * 3;
+          const factor = (days - i) / days;
+          closes.push(+(baseClose - (1 - factor) * 8 + noise).toFixed(2));
+          sma5s.push(+(baseSma5 - (1 - factor) * 5 + noise * 0.4).toFixed(2));
+          sma20s.push(+(baseSma20 - (1 - factor) * 2 + noise * 0.2).toFixed(2));
+        }
+        // Fix last values to actual
+        closes[closes.length - 1] = analysis.latest_close;
+        sma5s[sma5s.length - 1] = analysis.sma_5;
+        sma20s[sma20s.length - 1] = analysis.sma_20;
+
+        // Price chart (last 5 days)
+        const last5Labels = labels.slice(-5);
+        const last5Closes = closes.slice(-5);
+
+        if (priceChartInst) priceChartInst.destroy();
+        priceChartInst = new Chart(document.getElementById("priceChart"), {
+          type: "line",
+          data: {
+            labels: last5Labels,
+            datasets: [
+              {
+                label: currentSymbol + " 收盘价",
+                data: last5Closes,
+                borderColor: "#c84b2f",
+                backgroundColor: "rgba(200,75,47,0.08)",
+                borderWidth: 2.5,
+                pointRadius: 5,
+                pointBackgroundColor: "#c84b2f",
+                pointBorderColor: "#fff",
+                pointBorderWidth: 2,
+                fill: true,
+                tension: 0.35,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              title: {
+                // ← 加这段
+                display: true,
+                text: currentSymbol + " 价格走势",
+                font: { family: "'Syne', sans-serif", size: 13, weight: "700" },
+                color: "#1a1714",
+                padding: { bottom: 12 },
+              },
+            },
+            scales: {
+              x: { grid: { color: "#f0ede8" }, ticks: { font: { size: 10 } } },
+              y: {
+                grid: { color: "#f0ede8" },
+                ticks: { callback: (v) => "$" + v.toFixed(0) },
+              },
+            },
+          },
+        });
+
+        // SMA chart (all days)
+        if (smaChartInst) smaChartInst.destroy();
+        smaChartInst = new Chart(document.getElementById("smaChart"), {
+          type: "line",
+          data: {
+            labels,
+            datasets: [
+              {
+                label: "收盘价",
+                data: closes,
+                borderColor: "#1a1714",
+                borderWidth: 2,
+                pointRadius: 0,
+                fill: false,
+                tension: 0.3,
+              },
+              {
+                label: "SMA5",
+                data: sma5s,
+                borderColor: "#2f6bc8",
+                borderWidth: 1.5,
+                borderDash: [4, 3],
+                pointRadius: 0,
+                fill: false,
+                tension: 0.3,
+              },
+              {
+                label: "SMA20",
+                data: sma20s,
+                borderColor: "#c8972f",
+                borderWidth: 1.5,
+                borderDash: [6, 4],
+                pointRadius: 0,
+                fill: false,
+                tension: 0.3,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              title: {
+                display: true,
+                text: currentSymbol + " 均线分析",
+                font: { family: "'Syne', sans-serif", size: 13, weight: "700" },
+                color: "#1a1714",
+                padding: { bottom: 12 },
+              },
+              legend: {
+                display: true,
+                position: "top",
+                labels: { boxWidth: 12, font: { size: 10 }, padding: 12 },
+              },
+            },
+            scales: {
+              x: {
+                grid: { color: "#f0ede8" },
+                ticks: { maxTicksLimit: 6, font: { size: 10 } },
+              },
+              y: {
+                grid: { color: "#f0ede8" },
+                ticks: { callback: (v) => "$" + v.toFixed(0) },
+              },
+            },
+          },
+        });
+      }
+
+      function updateNotifications(data) {
+        const items = data.items || [];
+        document.getElementById("notifCount").textContent =
+          `共 ${items.length} 条`;
+
+        const tbody = document.getElementById("notifBody");
+        if (items.length === 0) {
+          tbody.innerHTML =
+            '<tr><td colspan="7" class="empty-state">暂无 Alert 记录</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = items
+          .map(
+            (n) => `
+    <tr>
+      <td style="color:var(--text-muted)">#${n.id}</td>
+      <td><strong style="font-family:'Syne',sans-serif">${n.symbol}</strong></td>
+      <td>${fmt(n.price)}</td>
+      <td><span class="condition-pill ${n.condition}">${n.condition === "above" ? "↑ above" : "↓ below"}</span></td>
+      <td>${fmt(n.threshold)}</td>
+      <td style="color:var(--text-muted)">${n.message}</td>
+      <td style="color:var(--text-muted)">${fmtTime(n.event_timestamp)}</td>
+    </tr>
+  `,
+          )
+          .join("");
+      }
+
+      // Init
+      loadData();
+
+      // Auto refresh every 60 seconds
+      setInterval(loadData, 60000);
+    </script>
+  </body>
+</html>

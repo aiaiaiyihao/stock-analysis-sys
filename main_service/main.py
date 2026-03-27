@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 from alert import check_alert
 from analysis import add_indicators
@@ -9,6 +10,13 @@ from kafka_producer import publish_alert_event
 
 app = FastAPI(title="Main Stock Service")
 
+# ← 加这段
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def home():

@@ -6,8 +6,16 @@ from sqlalchemy import select
 from consumer import consume_alerts
 from database import Base, SessionLocal, engine
 from models import Notification
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="Notification Service")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 Base.metadata.create_all(bind=engine)
 
